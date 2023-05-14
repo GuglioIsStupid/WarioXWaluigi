@@ -4,8 +4,27 @@ function love.load()
     music:setLooping(true)
     music:setVolume(0.8)
     music:play()
+    sadsong = love.audio.newSource("music/sadsong.wav", "stream")
+    sadsong:setLooping(true)
+    sadsong:setVolume(0.8)
+    trophy = love.audio.newSource("music/trophy.wav", "static")
+    trophy:setLooping(true)
+    trophy:setVolume(0.8)
+    trophy:seek(12.25)
+
+    Timer = require "lib.Timer"
 
     kissing = false
+
+    toadScream = love.audio.newSource("sounds/000000d1.wav", "static")
+    warioScream = love.audio.newSource("sounds/000000cf.wav", "static")
+    waluigiScream = love.audio.newSource("sounds/000000d0.wav", "static")
+
+    sadBG = love.graphics.newImage("images/sad.png")
+    loseText = love.graphics.newImage("images/deathtext.png")
+    loseTextY = {800}
+    gameOverSpr = love.graphics.newImage("images/gameover.png")
+    rightclicktoskip = love.graphics.newImage("images/rightclicktoskip.png")
 
     waluigiTitle = {
         [0] = love.graphics.newImage("sprites/waluigiTitle/sprite20_0.png"),
@@ -205,6 +224,7 @@ function love.load()
     qblock = love.graphics.newImage("sprites/qblock/qblock_0.png")
     sky = love.graphics.newImage("images/sky.png")
     cloud = love.graphics.newImage("images/cloud.png")
+    bush = love.graphics.newImage("images/bush.png")
     blushers = {
         [0] = love.graphics.newImage("sprites/sexies/sprite18_0.png"),
         [1] = love.graphics.newImage("sprites/sexies/sprite18_1.png"),
@@ -215,8 +235,23 @@ function love.load()
     }
     evilbitch = {
         [0] = love.graphics.newImage("sprites/TOAD/sprite25_0.png"),
-        [1] = love.graphics.newImage("sprites/TOAD/sprite25_1.png")
+        [1] = love.graphics.newImage("sprites/TOAD/sprite25_1.png"),
+        x = 1200
     }
+    evilbitchMad = {
+        [0] = love.graphics.newImage("sprites/spr_Toad_Angry/spr_Toad_Angry_0.png"),
+        [1] = love.graphics.newImage("sprites/spr_Toad_Angry/spr_Toad_Angry_1.png"),
+        x=725
+    }
+    fruit = {
+        [0] = love.graphics.newImage("sprites/fruit/sprite30_0.png"),
+        [1] = love.graphics.newImage("sprites/fruit/sprite30_1.png"),
+    }
+
+    Hooray = love.graphics.newImage("images/Hooray.png")
+    YIPPEE = love.graphics.newImage("images/YIPPEE.png")
+    YIPPEEY = {-500}
+
     titlebgscroll = {x = 0, y = 0}
     twoCurrentFrame = 1
     fortyNineCurrentFrame = 1
@@ -230,10 +265,20 @@ function love.load()
     -- set background color to a bright magenta
     love.graphics.setBackgroundColor(0.85, 0, 0.85)
 
+    animTimer = 0
+
+    -- game shit
+    percentage = 0
+
     curMenu = "title"
+
+    toadComing = false
+    toadChance = 0
+    toadTimer = 0
 end
 
 function love.update(dt)
+    Timer.update(dt)
     twoFrameTimer = twoFrameTimer + dt
     if twoFrameTimer > twoFrameTimerMax then
         twoCurrentFrame = (twoCurrentFrame + 1) % 2
@@ -260,9 +305,50 @@ function love.update(dt)
         -- if mouse is down set kissing to true
         if love.mouse.isDown(1) then
             kissing = true
-        else
+            percentage = percentage + 1 * dt
+            if toadHere and not lose then 
+                Timer.cancel(toadTween)
+                lose = true
+                love.audio.play(toadScream)
+                Timer.after(0.5, function() 
+                    SHOCKED = true
+                    love.audio.play(waluigiScream) 
+                    love.audio.stop(warioScream)
+                    Timer.after(1, function()
+                        music:stop()
+                        sadsong:play()
+                        Timer.tween(30, loseTextY, {-300}, "linear", function() drawGameOver = true end)
+                        curMenu = "lose"
+                        love.graphics.setBackgroundColor(0.2,0.2,0.2)
+                    end)
+                end)
+            end
+        elseif not love.mouse.isDown(1) and not lose then
             kissing = false
         end
+    end
+
+    if percentage > 100 then
+        percentage = 100
+        music:stop()
+        trophy:play()
+
+        curMenu = "win"
+        Timer.tween(10, YIPPEEY, {0}, "linear", function() end)
+    end
+
+    if curMenu == "play" then
+        toadChance = love.math.random(1, 1500)
+        if toadChance == 1 and not toadComing then
+            toadComing = true
+            toadTween = Timer.tween(2, evilbitch, {x= 700}, "linear", function() Timer.after(1.5, function() Timer.tween(2, evilbitch, {x= 1200}, "linear", function() toadHere = false;toadComing=false end) end) end)
+        end
+    end
+
+    if evilbitch.x <= 800 then
+        toadHere = true
+    else
+        toadHere = false
     end
 end
 
@@ -278,7 +364,22 @@ function love.mousepressed(x, y, button, istouch)
                 love.graphics.setBackgroundColor(87/255, 179/255, 239/255)
             end
         end
-        
+    elseif button == 2 then
+        if curMenu == "lose" or curMenu == "win" then
+            -- go to menu
+            love.graphics.setBackgroundColor(0.85, 0, 0.85)
+            curMenu = "title"
+            trophy:stop()
+            sadsong:stop()
+            music:play()
+            percentage = 0
+            lose = false
+            drawGameOver = false
+            loseTextY = {-300}
+            YIPPEEY = {-500}
+            SHOCKED = false
+            Timer.clear()
+        end
     end
 end
 
@@ -311,12 +412,43 @@ function love.draw()
         love.graphics.draw(block, 20+96*3, 45)
         
         -- draw blushers
-        if not kissing then
-            love.graphics.draw(blushers[twoCurrentFrame], 450, 500, 0, 1, 1, blushers[twoCurrentFrame]:getWidth(), blushers[twoCurrentFrame]:getHeight())
+        if not SHOCKED then
+            if not kissing then
+                love.graphics.draw(blushers[twoCurrentFrame], 450, 500, 0, 1, 1, blushers[twoCurrentFrame]:getWidth(), blushers[twoCurrentFrame]:getHeight())
+            else
+                love.graphics.draw(kissers[twoCurrentFrame], 400, 500, 0, 1, 1, kissers[twoCurrentFrame]:getWidth(), kissers[twoCurrentFrame]:getHeight())
+            end
         else
-            love.graphics.draw(kissers[twoCurrentFrame], 400, 500, 0, 1, 1, kissers[twoCurrentFrame]:getWidth(), kissers[twoCurrentFrame]:getHeight())
+            love.graphics.draw(SHOCKEDASSHIT, 400, 500, 0, 1, 1, SHOCKEDASSHIT:getWidth(), SHOCKEDASSHIT:getHeight())
         end
-
+        if not lose then
+            love.graphics.draw(evilbitch[twoCurrentFrame], evilbitch.x, 450, 0, 1, 1, evilbitch[twoCurrentFrame]:getWidth(), evilbitch[twoCurrentFrame]:getHeight())
+        else
+            love.graphics.draw(evilbitchMad[twoCurrentFrame], evilbitch.x, 450, 0, 1, 1, evilbitchMad[twoCurrentFrame]:getWidth(), evilbitchMad[twoCurrentFrame]:getHeight())
+        end
+        love.graphics.draw(bush, 625, 220, 0, 0.8, 0.8)
+        love.graphics.draw(fruit[twoCurrentFrame], 725, 325, 0, 0.9, 0.9)
+        -- draw percentage bar at top left
+        love.graphics.setColor(0,0,0)
+        love.graphics.rectangle("fill", 0, 0, 300, 30)
+        love.graphics.setColor(0.85, 0, 0.85)
+        -- percentage goes from 0-100
+        love.graphics.rectangle("fill", 0, 0, percentage * 3, 30)
+        love.graphics.setColor(1,1,1)
+    elseif curMenu == "lose" then
+        love.graphics.draw(sadBG)
+        love.graphics.draw(loseText, 140, loseTextY[1])
+        if drawGameOver then
+            love.graphics.draw(gameOverSpr, 140, 90, 0, 0.9, 0.9)
+        end
+        love.graphics.draw(rightclicktoskip, 625, 455, 0)
+    elseif curMenu == "win" then
+        love.graphics.draw(sky, 0, 0, 0, 1, 1)
+        love.graphics.draw(heartLeft[twoCurrentFrame], 270, 120, 0, 1, 1, heartLeft[twoCurrentFrame]:getWidth(), heartLeft[twoCurrentFrame]:getHeight())
+        love.graphics.draw(heartRight[twoCurrentFrame], 700, 340, 0, 1, 1, heartRight[twoCurrentFrame]:getWidth(), heartRight[twoCurrentFrame]:getHeight())
+        love.graphics.draw(Hooray, 140, 90, 0, 0.9, 0.9)
+        love.graphics.draw(YIPPEE, 140, YIPPEEY[1])
+        love.graphics.draw(rightclicktoskip, 625, 455, 0)
     end
 
     love.graphics.setColor(0,0,0)
